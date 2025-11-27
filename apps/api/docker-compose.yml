@@ -1,0 +1,164 @@
+# =============================================================================
+# TEMPO INFRASTRUCTURE - Docker Compose
+# =============================================================================
+# This is how services are orchestrated in production at big tech companies.
+# Docker Compose locally mimics what Kubernetes does in production.
+#
+# To start everything: docker-compose up -d
+# To stop everything:  docker-compose down
+# To see logs:         docker-compose logs -f
+# To reset database:   docker-compose down -v (removes volumes)
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # PostgreSQL Database
+  # ===========================================================================
+  # The primary data store. In production at big tech:
+  # - Would have multiple read replicas
+  # - Would be sharded across regions
+  # - Would have automated failover
+  # ===========================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: tempo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tempo
+      POSTGRES_PASSWORD: tempo_secure_password_123
+      POSTGRES_DB: tempo
+      # Performance tuning (these would be much higher in production)
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist data across container restarts
+      # This is like having a persistent disk in the cloud
+      - postgres_data:/var/lib/postgresql/data
+      # Run schema on first startup
+      - ./internal/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tempo -d tempo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Resource limits (in production, these would be much higher)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ===========================================================================
+  # PgBouncer - Connection Pooler
+  # ===========================================================================
+  # WHY PGBOUNCER?
+  # - PostgreSQL connections are expensive (~2MB each)
+  # - Each Go server might want 25 connections
+  # - With 100 servers = 2,500 connections = 5GB just for connections!
+  # - PgBouncer sits in front and multiplexes connections
+  # - 2,500 app connections → 50 actual database connections
+  #
+  # Used at: Heroku, Instagram, GitLab, Supabase
+  # ===========================================================================
+  pgbouncer:
+    image: edoburu/pgbouncer:1.21.0
+    container_name: tempo-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://tempo:tempo_secure_password_123@postgres:5432/tempo
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 20
+      MIN_POOL_SIZE: 5
+      RESERVE_POOL_SIZE: 5
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ===========================================================================
+  # Redis - Cache & Session Store
+  # ===========================================================================
+  # WHY REDIS?
+  # - In-memory = extremely fast (sub-millisecond)
+  # - Used for: caching, rate limiting, sessions, pub/sub
+  # - At big tech: Redis clusters with 100GB+ memory
+  #
+  # Used at: Twitter, GitHub, Stack Overflow, Instagram
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: tempo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ===========================================================================
+  # Tempo API Server
+  # ===========================================================================
+  # The Go backend. In production:
+  # - Would be multiple instances behind a load balancer
+  # - Would be deployed as Kubernetes pods
+  # - Would auto-scale based on CPU/memory
+  # ===========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tempo-api
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      ENVIRONMENT: development
+      # Connect through PgBouncer, not directly to PostgreSQL
+      DATABASE_URL: postgres://tempo:tempo_secure_password_123@pgbouncer:5432/tempo?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: change-this-to-a-secure-random-string-in-production
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 168h
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+# =============================================================================
+# Volumes - Persistent Storage
+# =============================================================================
+# Docker volumes persist data even when containers are destroyed.
+# In production, this would be cloud block storage (EBS, Persistent Disks).
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# =============================================================================
+# Networks (optional, Docker Compose creates a default one)
+# =============================================================================
+# In production, you'd have:
+# - Private network for database (not exposed to internet)
+# - Public network for load balancer
+# - Service mesh for inter-service communication
+# =============================================================================
+
