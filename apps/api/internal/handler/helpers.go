@@ -6,13 +6,9 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+
+	"tempo/internal/middleware"
 )
-
-// Context key type to avoid collisions
-// Using a custom type prevents accidentally using the same key
-type contextKey string
-
-const userIDKey contextKey = "userID"
 
 // respondJSON sends a JSON response
 func respondJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -34,20 +30,9 @@ func respondError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
-// setUserIDInContext adds the user ID to the request context
-// Used by auth middleware
-func setUserIDInContext(ctx context.Context, userID uuid.UUID) context.Context {
-	return context.WithValue(ctx, userIDKey, userID)
-}
-
 // getUserIDFromContext retrieves the user ID from the request context
-// Returns nil if not authenticated
+// Uses the middleware's GetUserID function to ensure consistency
 func getUserIDFromContext(ctx context.Context) *uuid.UUID {
-	if value := ctx.Value(userIDKey); value != nil {
-		if userID, ok := value.(uuid.UUID); ok {
-			return &userID
-		}
-	}
-	return nil
+	return middleware.GetUserID(ctx)
 }
 
