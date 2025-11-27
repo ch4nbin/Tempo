@@ -157,34 +157,45 @@ export function VideoCanvas({
       decay: number,
       intensity: number
     ) => {
-      const maxEchoes = Math.floor(3 + intensity * 5) // 3-8 echoes
+      const maxEchoes = Math.floor(3 + intensity * 7) // 3-10 echoes
+      const offsetAmount = 8 + intensity * 15 // 8-23 pixels offset per echo
       
-      // Add current frame to history
-      frameHistoryRef.current.unshift(
-        ctx.getImageData(0, 0, width, height)
+      // Store current frame in history (clone it)
+      const frameClone = new ImageData(
+        new Uint8ClampedArray(currentFrame.data),
+        currentFrame.width,
+        currentFrame.height
       )
+      frameHistoryRef.current.unshift(frameClone)
       
       // Keep only needed frames
       if (frameHistoryRef.current.length > maxEchoes) {
-        frameHistoryRef.current = frameHistoryRef.current.slice(0, maxEchoes)
+        frameHistoryRef.current.length = maxEchoes
       }
 
-      // Draw echoes from oldest to newest
+      // Need at least 2 frames to show echo effect
+      if (frameHistoryRef.current.length < 2) {
+        return
+      }
+
+      // Clear and redraw with echoes (oldest first, newest on top)
       ctx.clearRect(0, 0, width, height)
       
+      // Create a reusable temp canvas
+      const tempCanvas = document.createElement('canvas')
+      tempCanvas.width = width
+      tempCanvas.height = height
+      const tempCtx = tempCanvas.getContext('2d')!
+      
+      // Draw from oldest to newest (so newest is on top)
       for (let i = frameHistoryRef.current.length - 1; i >= 0; i--) {
-        const alpha = Math.pow(decay, i) * (1 - i / frameHistoryRef.current.length)
-        ctx.globalAlpha = alpha
+        const frame = frameHistoryRef.current[i]
+        const alpha = Math.pow(decay, i)
         
-        // Create temp canvas for the frame
-        const tempCanvas = document.createElement('canvas')
-        tempCanvas.width = width
-        tempCanvas.height = height
-        const tempCtx = tempCanvas.getContext('2d')!
-        tempCtx.putImageData(frameHistoryRef.current[i], 0, 0)
+        tempCtx.putImageData(frame, 0, 0)
         
-        // Draw with offset
-        const offset = i * 3 * intensity
+        ctx.globalAlpha = i === 0 ? 1 : alpha * 0.6 // Current frame full opacity
+        const offset = i * offsetAmount
         ctx.drawImage(tempCanvas, offset, offset)
       }
       

@@ -239,9 +239,9 @@ export default function Home() {
 
               {/* Effect indicator */}
               {selectedEffect && videoFile && (
-                <div className="absolute top-3 left-3 px-2 py-1 bg-tempo-accent/90 text-white text-xs rounded-md flex items-center gap-1.5">
+                <div className="absolute top-3 left-3 px-2 py-1 bg-tempo-accent/90 text-white text-xs rounded-md flex items-center gap-1.5 capitalize">
                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                  Time Smear Active
+                  {selectedEffect.replace('-', ' ')} Active
                 </div>
               )}
             </div>
