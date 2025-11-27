@@ -175,7 +175,7 @@ export function ExportModal({ isOpen, onClose, canvasRef, videoRef }: ExportModa
       setStatus('failed')
       setError(err instanceof Error ? err.message : 'Export failed')
     }
-  }, [canvasRef, videoRef, quality])
+  }, [canvasRef, videoRef, getBitrate])
 
   const handleCancel = useCallback(() => {
     // Set cancelled flag BEFORE stopping recorder

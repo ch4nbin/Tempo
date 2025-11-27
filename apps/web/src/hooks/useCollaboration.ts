@@ -104,7 +104,7 @@ export function useCollaboration(projectId: string): UseCollaborationReturn {
         setCollaborators(states)
       }
       
-      state.awareness.on('change', updateAwareness)
+      state.awareness?.on('change', updateAwareness)
       updateAwareness()
     }
     
