@@ -118,7 +118,7 @@ export function PropertiesPanel({
           Collaborators
         </h2>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center text-xs font-medium text-white">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-xs font-medium text-white">
             Y
           </div>
           <span className="text-sm">You</span>

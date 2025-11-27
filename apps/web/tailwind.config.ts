@@ -10,13 +10,14 @@ const config: Config = {
     extend: {
       colors: {
         tempo: {
-          bg: '#0a0a0f',
-          surface: '#12121a',
-          border: '#1e1e2e',
-          accent: '#6366f1',
-          'accent-dim': '#4f46e5',
-          text: '#e2e2e9',
-          'text-muted': '#6b6b80',
+          bg: '#0a0c10',
+          surface: '#0d1117',
+          border: '#21262d',
+          accent: '#2f81f7',
+          'accent-dim': '#1f6feb',
+          'accent-glow': 'rgba(47, 129, 247, 0.4)',
+          text: '#e6edf3',
+          'text-muted': '#7d8590',
         },
       },
       fontFamily: {
