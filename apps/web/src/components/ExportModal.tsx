@@ -33,14 +33,6 @@ export function ExportModal({ isOpen, onClose, canvasRef, videoRef }: ExportModa
     }
   }, [])
 
-  const getBitrate = () => {
-    switch (quality) {
-      case 'low': return 2500000
-      case 'medium': return 5000000
-      case 'high': return 10000000
-    }
-  }
-
   const handleExport = useCallback(async () => {
     const canvas = canvasRef?.current
     const video = videoRef?.current
@@ -54,6 +46,9 @@ export function ExportModal({ isOpen, onClose, canvasRef, videoRef }: ExportModa
       setError('Video not ready. Please wait for it to load.')
       return
     }
+
+    // Calculate bitrate based on quality
+    const bitrate = quality === 'low' ? 2500000 : quality === 'medium' ? 5000000 : 10000000
 
     setStatus('recording')
     setProgress(0)
@@ -78,7 +73,7 @@ export function ExportModal({ isOpen, onClose, canvasRef, videoRef }: ExportModa
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType,
-        videoBitsPerSecond: getBitrate(),
+        videoBitsPerSecond: bitrate,
       })
       mediaRecorderRef.current = mediaRecorder
 
@@ -175,7 +170,7 @@ export function ExportModal({ isOpen, onClose, canvasRef, videoRef }: ExportModa
       setStatus('failed')
       setError(err instanceof Error ? err.message : 'Export failed')
     }
-  }, [canvasRef, videoRef, getBitrate])
+  }, [canvasRef, videoRef, quality])
 
   const handleCancel = useCallback(() => {
     // Set cancelled flag BEFORE stopping recorder
