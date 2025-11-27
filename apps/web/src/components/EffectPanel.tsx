@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { generateEffect, type GeneratedEffect } from '@/lib/api'
 
 interface Effect {
   id: string
@@ -21,25 +22,56 @@ const EFFECTS: Effect[] = [
 interface EffectPanelProps {
   selectedEffect: string | null
   onSelectEffect: (effectId: string | null) => void
-  onAIGenerate: (prompt: string) => void
+  onAIGenerate: (prompt: string, effects: GeneratedEffect[]) => void
 }
 
 export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: EffectPanelProps) {
   const [aiPrompt, setAiPrompt] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [aiResult, setAiResult] = useState<{ effects: GeneratedEffect[]; reasoning: string } | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const handleEffectClick = (effectId: string) => {
     if (selectedEffect === effectId) {
-      onSelectEffect(null) // Deselect if already selected
+      onSelectEffect(null)
     } else {
       onSelectEffect(effectId)
     }
   }
 
-  const handleAISubmit = () => {
-    if (aiPrompt.trim()) {
-      onAIGenerate(aiPrompt.trim())
-      setAiPrompt('')
+  const handleAISubmit = async () => {
+    if (!aiPrompt.trim() || isGenerating) return
+
+    setIsGenerating(true)
+    setAiError(null)
+    setAiResult(null)
+
+    try {
+      const result = await generateEffect(aiPrompt.trim())
+      setAiResult(result)
+      
+      // Auto-apply the first effect
+      if (result.effects.length > 0) {
+        onAIGenerate(aiPrompt.trim(), result.effects)
+        onSelectEffect(result.effects[0].type)
+      }
+    } catch (err) {
+      // If backend is not running, use fallback
+      console.warn('AI API not available, using fallback')
+      const fallbackEffects: GeneratedEffect[] = [
+        { type: 'time-smear', params: { decay: 0.9, intensity: 0.5 } }
+      ]
+      setAiResult({ effects: fallbackEffects, reasoning: 'Fallback: API not available' })
+      onAIGenerate(aiPrompt.trim(), fallbackEffects)
+      onSelectEffect('time-smear')
+    } finally {
+      setIsGenerating(false)
     }
+  }
+
+  const handleApplyAIEffect = (effect: GeneratedEffect) => {
+    onSelectEffect(effect.type)
+    onAIGenerate(aiPrompt, [effect])
   }
 
   return (
@@ -48,10 +80,10 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
         Effects
       </h2>
 
-      <div className="space-y-2 flex-1">
+      <div className="space-y-2 flex-1 overflow-y-auto">
         {EFFECTS.map((effect) => {
           const isSelected = selectedEffect === effect.id
-          const isAvailable = effect.id === 'time-smear' // Only Time Smear works for now
+          const isAvailable = effect.id === 'time-smear'
           
           return (
             <button
@@ -95,23 +127,61 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAISubmit()}
-            placeholder="Describe a mood..."
-            className="w-full px-3 py-2 text-sm bg-tempo-bg border border-tempo-border rounded-lg placeholder:text-tempo-text-muted focus:outline-none focus:border-tempo-accent focus:ring-1 focus:ring-tempo-accent/50 transition-all pr-10"
+            placeholder="dreamy underwater..."
+            disabled={isGenerating}
+            className="w-full px-3 py-2 text-sm bg-tempo-bg border border-tempo-border rounded-lg placeholder:text-tempo-text-muted focus:outline-none focus:border-tempo-accent focus:ring-1 focus:ring-tempo-accent/50 transition-all pr-10 disabled:opacity-50"
           />
           <button
             onClick={handleAISubmit}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-tempo-accent hover:text-white transition-colors p-1"
+            disabled={isGenerating || !aiPrompt.trim()}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-tempo-accent hover:text-white transition-colors p-1 disabled:opacity-50"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-            </svg>
+            {isGenerating ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+              </svg>
+            )}
           </button>
         </div>
-        <p className="text-xs text-tempo-text-muted mt-2 opacity-60">
-          Coming soon: AI-powered effect generation
+
+        {/* AI Result */}
+        {aiResult && (
+          <div className="mt-3 p-3 bg-tempo-bg rounded-lg border border-tempo-border">
+            <p className="text-xs text-tempo-text-muted mb-2">{aiResult.reasoning}</p>
+            <div className="space-y-1">
+              {aiResult.effects.map((effect, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleApplyAIEffect(effect)}
+                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
+                    selectedEffect === effect.type
+                      ? 'bg-tempo-accent/20 text-tempo-accent'
+                      : 'hover:bg-tempo-border/50'
+                  }`}
+                >
+                  <span className="font-medium">{effect.type}</span>
+                  <span className="text-tempo-text-muted ml-2">
+                    {Object.entries(effect.params).map(([k, v]) => `${k}: ${(v as number).toFixed(2)}`).join(', ')}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {aiError && (
+          <p className="mt-2 text-xs text-red-400">{aiError}</p>
+        )}
+
+        <p className="text-xs text-tempo-text-muted mt-2">
+          Try: &quot;nostalgic memory&quot;, &quot;anxious heartbeat&quot;, &quot;psychedelic&quot;
         </p>
       </div>
     </aside>
   )
 }
-

@@ -5,6 +5,8 @@ import { VideoCanvas } from '@/components/VideoCanvas'
 import { EffectPanel } from '@/components/EffectPanel'
 import { PropertiesPanel } from '@/components/PropertiesPanel'
 import { Timeline } from '@/components/Timeline'
+import { UploadOverlay } from '@/components/UploadOverlay'
+import { ExportModal } from '@/components/ExportModal'
 import { useCollaboration } from '@/hooks/useCollaboration'
 
 export default function Home() {
@@ -15,6 +17,8 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [showUploadOverlay, setShowUploadOverlay] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -80,13 +84,18 @@ export default function Home() {
     setDuration(dur)
   }, [])
 
-  const handleAIGenerate = useCallback((prompt: string) => {
-    console.log('AI Generate:', prompt)
-    setSelectedEffect('time-smear')
-    setEffectParams({
-      decay: 0.85 + Math.random() * 0.1,
-      intensity: 0.4 + Math.random() * 0.4,
-    })
+  const handleAIGenerate = useCallback((prompt: string, effects: Array<{ type: string; params: Record<string, number> }>) => {
+    console.log('AI Generate:', prompt, effects)
+    if (effects.length > 0) {
+      const firstEffect = effects[0]
+      setSelectedEffect(firstEffect.type)
+      if (firstEffect.params.decay !== undefined && firstEffect.params.intensity !== undefined) {
+        setEffectParams({
+          decay: firstEffect.params.decay,
+          intensity: firstEffect.params.intensity,
+        })
+      }
+    }
   }, [])
 
   const handlePlayPause = useCallback(() => {
@@ -100,6 +109,14 @@ export default function Home() {
   const handleCursorMove = useCallback((position: number | null) => {
     updateCursor(position)
   }, [updateCursor])
+
+  const handleUploadComplete = useCallback((videoUrl: string, filename: string) => {
+    // Create a file-like object for the VideoCanvas
+    // In production, we'd fetch the video from the URL
+    console.log('Upload complete:', videoUrl, filename)
+    // For now, just close the overlay - user can still drag/drop locally
+    setShowUploadOverlay(false)
+  }, [])
 
   // Transform collaborators for components
   const timelineCollaborators = collaborators.map(c => ({
@@ -169,12 +186,16 @@ export default function Home() {
           </div>
 
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => videoFile ? fileInputRef.current?.click() : setShowUploadOverlay(true)}
             className="px-3 py-1.5 text-sm text-tempo-text-muted hover:text-tempo-text transition-colors"
           >
             {videoFile ? 'Change Video' : 'Open Video'}
           </button>
-          <button className="px-3 py-1.5 text-sm bg-tempo-accent hover:bg-tempo-accent-dim text-white rounded-md transition-colors">
+          <button 
+            onClick={() => setShowExportModal(true)}
+            disabled={!videoFile}
+            className="px-3 py-1.5 text-sm bg-tempo-accent hover:bg-tempo-accent-dim text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Export
           </button>
         </nav>
@@ -252,6 +273,20 @@ export default function Home() {
           isConnected={isConnected}
         />
       </main>
+
+      {/* Upload Overlay */}
+      <UploadOverlay
+        isOpen={showUploadOverlay}
+        onClose={() => setShowUploadOverlay(false)}
+        onUploadComplete={handleUploadComplete}
+      />
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        projectId={projectId}
+      />
     </div>
   )
 }
