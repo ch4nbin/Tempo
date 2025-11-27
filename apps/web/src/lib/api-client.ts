@@ -86,16 +86,15 @@ async function fetchAPI<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
-  
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...options.headers,
-  }
+
+  // Normalize headers so we can safely mutate them
+  const headers = new Headers(options.headers ?? {})
+  headers.set('Content-Type', 'application/json')
 
   // Add auth token if available
   const token = getAccessToken()
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   const response = await fetch(url, {
