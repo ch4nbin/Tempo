@@ -157,8 +157,9 @@ export function VideoCanvas({
       decay: number,
       intensity: number
     ) => {
-      const maxEchoes = Math.floor(3 + intensity * 7) // 3-10 echoes
-      const offsetAmount = 8 + intensity * 15 // 8-23 pixels offset per echo
+      const maxEchoes = Math.floor(5 + intensity * 10) // 5-15 echoes
+      const offsetX = 15 + intensity * 25 // 15-40 pixels X offset per echo
+      const offsetY = 8 + intensity * 15 // 8-23 pixels Y offset per echo
       
       // Store current frame in history (clone it)
       const frameClone = new ImageData(
@@ -190,13 +191,21 @@ export function VideoCanvas({
       // Draw from oldest to newest (so newest is on top)
       for (let i = frameHistoryRef.current.length - 1; i >= 0; i--) {
         const frame = frameHistoryRef.current[i]
-        const alpha = Math.pow(decay, i)
+        // More visible echoes - higher base opacity
+        const alpha = 0.3 + Math.pow(decay, i * 0.5) * 0.7
         
         tempCtx.putImageData(frame, 0, 0)
         
-        ctx.globalAlpha = i === 0 ? 1 : alpha * 0.6 // Current frame full opacity
-        const offset = i * offsetAmount
-        ctx.drawImage(tempCanvas, offset, offset)
+        ctx.globalAlpha = i === 0 ? 1 : alpha
+        const ox = i * offsetX
+        const oy = i * offsetY
+        
+        // Add color tint to older echoes
+        if (i > 0) {
+          ctx.filter = `hue-rotate(${i * 15}deg) saturate(${1.2 - i * 0.1})`
+        }
+        ctx.drawImage(tempCanvas, ox, oy)
+        ctx.filter = 'none'
       }
       
       ctx.globalAlpha = 1
@@ -277,6 +286,11 @@ export function VideoCanvas({
       decay: number,
       intensity: number
     ) => {
+      // Much stronger memory effect
+      const blendAmount = 0.3 + decay * 0.6 // 30-90% blend with previous
+      const desatAmount = 0.5 + intensity * 0.5 // 50-100% desaturation on prev
+      const blurAmount = 2 + intensity * 8 // 2-10px blur
+      
       if (previousFrameRef.current) {
         const prev = previousFrameRef.current
         
@@ -286,31 +300,41 @@ export function VideoCanvas({
           const g = currentFrame.data[i + 1]
           const b = currentFrame.data[i + 2]
           
-          // Previous frame (faded)
+          // Previous frame colors
           const pr = prev.data[i]
           const pg = prev.data[i + 1]
           const pb = prev.data[i + 2]
           
-          // Desaturate previous frame
+          // Desaturate previous frame heavily
           const gray = (pr + pg + pb) / 3
-          const fadedR = pr + (gray - pr) * intensity
-          const fadedG = pg + (gray - pg) * intensity
-          const fadedB = pb + (gray - pb) * intensity
+          const fadedR = pr + (gray - pr) * desatAmount
+          const fadedG = pg + (gray - pg) * desatAmount
+          const fadedB = pb + (gray - pb) * desatAmount
           
-          // Blend with decay
-          currentFrame.data[i] = r * (1 - decay * 0.5) + fadedR * decay * 0.5
-          currentFrame.data[i + 1] = g * (1 - decay * 0.5) + fadedG * decay * 0.5
-          currentFrame.data[i + 2] = b * (1 - decay * 0.5) + fadedB * decay * 0.5
+          // Strong blend with faded previous
+          currentFrame.data[i] = r * (1 - blendAmount) + fadedR * blendAmount
+          currentFrame.data[i + 1] = g * (1 - blendAmount) + fadedG * blendAmount
+          currentFrame.data[i + 2] = b * (1 - blendAmount) + fadedB * blendAmount
         }
         
         ctx.putImageData(currentFrame, 0, 0)
         
-        // Add slight blur effect via canvas filter
-        ctx.filter = `blur(${intensity * 2}px)`
-        ctx.globalAlpha = decay * 0.3
+        // Add noticeable blur overlay for dreamy effect
+        ctx.filter = `blur(${blurAmount}px)`
+        ctx.globalAlpha = 0.3 + decay * 0.4 // 30-70% blur overlay
         ctx.drawImage(canvas, 0, 0)
         ctx.filter = 'none'
         ctx.globalAlpha = 1
+        
+        // Add slight vignette/fade at edges
+        const gradient = ctx.createRadialGradient(
+          canvas.width / 2, canvas.height / 2, canvas.width * 0.2,
+          canvas.width / 2, canvas.height / 2, canvas.width * 0.7
+        )
+        gradient.addColorStop(0, 'rgba(0,0,0,0)')
+        gradient.addColorStop(1, `rgba(0,0,0,${intensity * 0.4})`)
+        ctx.fillStyle = gradient
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
       }
       
       previousFrameRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
@@ -323,9 +347,9 @@ export function VideoCanvas({
       height: number,
       speed: number
     ) => {
-      // Wave distortion effect
-      const waveAmplitude = 10 * speed
-      const waveFrequency = 0.02
+      // Much stronger wave distortion effect
+      const waveAmplitude = 20 + speed * 40 // 20-60 pixels
+      const waveFrequency = 0.015 + speed * 0.02 // Wave density
       const time = timeRef.current
       
       const tempCanvas = document.createElement('canvas')
@@ -334,17 +358,46 @@ export function VideoCanvas({
       const tempCtx = tempCanvas.getContext('2d')!
       tempCtx.putImageData(currentFrame, 0, 0)
       
-      ctx.clearRect(0, 0, width, height)
+      // Second temp canvas for two-pass distortion
+      const tempCanvas2 = document.createElement('canvas')
+      tempCanvas2.width = width
+      tempCanvas2.height = height
+      const tempCtx2 = tempCanvas2.getContext('2d')!
       
-      // Draw with wave distortion
+      // First pass: horizontal waves (distort each row)
+      tempCtx2.clearRect(0, 0, width, height)
       for (let y = 0; y < height; y++) {
-        const offset = Math.sin(y * waveFrequency + time * 2) * waveAmplitude
-        ctx.drawImage(
+        const offsetX = Math.sin(y * waveFrequency + time * 3) * waveAmplitude
+        const scaleWave = 1 + Math.sin(y * waveFrequency * 2 + time * 2) * 0.05 * speed
+        tempCtx2.drawImage(
           tempCanvas,
           0, y, width, 1,
-          offset, y, width, 1
+          offsetX, y, width * scaleWave, 1
         )
       }
+      
+      // Second pass: vertical waves (distort each column)
+      ctx.clearRect(0, 0, width, height)
+      for (let x = 0; x < width; x++) {
+        const offsetY = Math.sin(x * waveFrequency * 1.5 + time * 2.5) * waveAmplitude * 0.5
+        ctx.drawImage(
+          tempCanvas2,
+          x, 0, 1, height,
+          x, offsetY, 1, height
+        )
+      }
+      
+      // Add ripple color effect
+      ctx.globalCompositeOperation = 'overlay'
+      ctx.globalAlpha = speed * 0.15
+      const gradient = ctx.createLinearGradient(0, 0, width, height)
+      gradient.addColorStop(0, `hsl(${(time * 50) % 360}, 70%, 50%)`)
+      gradient.addColorStop(0.5, `hsl(${(time * 50 + 120) % 360}, 70%, 50%)`)
+      gradient.addColorStop(1, `hsl(${(time * 50 + 240) % 360}, 70%, 50%)`)
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, width, height)
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = 1
       
       previousFrameRef.current = ctx.getImageData(0, 0, width, height)
     }
