@@ -21,16 +21,12 @@ RUN apk add --no-cache git ca-certificates
 # Set working directory
 WORKDIR /app
 
-# Copy go.mod and go.sum first (Docker layer caching)
-# If these don't change, Docker reuses the cached layer
-COPY go.mod go.sum ./
-
-# Download dependencies
-# This layer is cached unless go.mod/go.sum change
-RUN go mod download
-
-# Copy source code
+# Copy go.mod and source code
+COPY go.mod ./
 COPY . .
+
+# Download dependencies and generate go.sum
+RUN go mod tidy
 
 # Build the binary
 # CGO_ENABLED=0: Pure Go, no C dependencies (needed for Alpine)
