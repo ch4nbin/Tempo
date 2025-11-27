@@ -126,5 +126,5 @@ OPENAI_API_KEY=sk-...
 
 ## License
 
-MIT © 2024
-
+MIT License  
+Copyright © 2025 Chanbin Park
