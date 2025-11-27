@@ -19,6 +19,8 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false)
   const [showUploadOverlay, setShowUploadOverlay] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const videoCanvasRef = useRef<VideoCanvasHandle>(null)
@@ -129,6 +131,13 @@ export default function Home() {
     setShowUploadOverlay(false)
   }, [])
 
+  const handleCopyLink = useCallback(() => {
+    const url = window.location.href
+    navigator.clipboard.writeText(url)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }, [])
+
   // Transform collaborators for components
   const timelineCollaborators = collaborators.map(c => ({
     clientId: c.clientId,
@@ -228,6 +237,17 @@ export default function Home() {
               </span>
             </Link>
           )}
+
+          {/* Share button */}
+          <button
+            onClick={() => setShowShareModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            Share
+          </button>
 
           <div className="w-px h-6 bg-tempo-border" />
 
@@ -336,6 +356,97 @@ export default function Home() {
         canvasRef={{ current: videoCanvasRef.current?.canvas ?? null }}
         videoRef={{ current: videoCanvasRef.current?.video ?? null }}
       />
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-tempo-surface border border-tempo-border rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white">Share & Collaborate</h2>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="text-tempo-text-muted hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-tempo-text-muted text-sm mb-4">
+              Anyone with this link can edit this project in real-time. Share it with your friends and collaborators!
+            </p>
+
+            {/* Link display */}
+            <div className="flex items-center gap-2 mb-4">
+              <div className="flex-1 bg-tempo-bg border border-tempo-border rounded-lg px-3 py-2 text-sm text-tempo-text-muted truncate font-mono">
+                {typeof window !== 'undefined' ? window.location.href : ''}
+              </div>
+              <button
+                onClick={handleCopyLink}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  linkCopied
+                    ? 'bg-green-500 text-white'
+                    : 'bg-tempo-accent hover:bg-tempo-accent-dim text-white'
+                }`}
+              >
+                {linkCopied ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+
+            {/* Current collaborators */}
+            <div className="border-t border-tempo-border pt-4">
+              <h3 className="text-sm font-medium text-tempo-text-muted mb-3">
+                Currently Online ({collaborators.length + 1})
+              </h3>
+              <div className="space-y-2">
+                {/* Current user */}
+                <div className="flex items-center gap-3 px-3 py-2 bg-tempo-bg rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-tempo-accent to-cyan-500 flex items-center justify-center text-sm font-medium text-white">
+                    {currentUser?.name?.charAt(0).toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm text-white">{currentUser?.name || 'Anonymous'}</div>
+                    <div className="text-xs text-tempo-text-muted">You</div>
+                  </div>
+                  <span className="w-2 h-2 rounded-full bg-green-400" />
+                </div>
+
+                {/* Other collaborators */}
+                {collaborators.map((collab) => (
+                  <div key={collab.clientId} className="flex items-center gap-3 px-3 py-2 bg-tempo-bg rounded-lg">
+                    <div 
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white"
+                      style={{ backgroundColor: collab.user.color }}
+                    >
+                      {collab.user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm text-white">{collab.user.name}</div>
+                      <div className="text-xs text-tempo-text-muted">Collaborator</div>
+                    </div>
+                    <span className="w-2 h-2 rounded-full bg-green-400" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Tips */}
+            <div className="mt-4 p-3 bg-tempo-accent/10 border border-tempo-accent/20 rounded-lg">
+              <p className="text-xs text-tempo-accent">
+                💡 <strong>Tip:</strong> Effect changes and timeline edits sync instantly between all collaborators!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link copied toast */}
+      {linkCopied && !showShareModal && (
+        <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium animate-pulse">
+          ✓ Link copied to clipboard!
+        </div>
+      )}
     </div>
   )
 }
