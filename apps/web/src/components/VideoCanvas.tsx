@@ -24,7 +24,12 @@ export function VideoCanvas({
   const videoRef = useRef<HTMLVideoElement>(null)
   const animationRef = useRef<number>(0)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  
+  // Effect state refs
   const previousFrameRef = useRef<ImageData | null>(null)
+  const frameHistoryRef = useRef<ImageData[]>([]) // For echo cascade
+  const timeRef = useRef<number>(0) // For animated effects
+  const startTimeRef = useRef<number>(Date.now())
   
   const [videoLoaded, setVideoLoaded] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
@@ -47,25 +52,30 @@ export function VideoCanvas({
     const canvas = canvasRef.current
     if (!video || !canvas) return
 
-    // Set canvas size to match video
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     ctxRef.current = ctx
     
-    // Draw first frame immediately
     if (ctx) {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     }
     
-    // Report initial duration
     if (onTimeUpdate) {
       onTimeUpdate(0, video.duration)
     }
     
+    startTimeRef.current = Date.now()
     setVideoLoaded(true)
   }, [onTimeUpdate])
+
+  // Reset effect state when effect changes
+  useEffect(() => {
+    previousFrameRef.current = null
+    frameHistoryRef.current = []
+    startTimeRef.current = Date.now()
+  }, [effect])
 
   // Render loop
   useEffect(() => {
@@ -76,44 +86,256 @@ export function VideoCanvas({
     if (!video || !canvas || !ctx || !videoLoaded) return
 
     const render = () => {
-      // Always draw current frame (even when paused for scrubbing)
+      const { decay, intensity } = effectParams
+      timeRef.current = (Date.now() - startTimeRef.current) / 1000
+
+      // Draw current frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height)
 
-      // Apply Time Smear effect
-      if (effect === 'time-smear' && previousFrameRef.current) {
-        const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const previousFrame = previousFrameRef.current
-        const { decay, intensity } = effectParams
-
-        // Blend frames
-        for (let i = 0; i < currentFrame.data.length; i += 4) {
-          const r = currentFrame.data[i]
-          const g = currentFrame.data[i + 1]
-          const b = currentFrame.data[i + 2]
-
-          const pr = previousFrame.data[i] * decay
-          const pg = previousFrame.data[i + 1] * decay
-          const pb = previousFrame.data[i + 2] * decay
-
-          // Mix current with decayed previous (take max for trail effect)
-          currentFrame.data[i] = Math.min(255, r + (Math.max(r, pr) - r) * intensity)
-          currentFrame.data[i + 1] = Math.min(255, g + (Math.max(g, pg) - g) * intensity)
-          currentFrame.data[i + 2] = Math.min(255, b + (Math.max(b, pb) - b) * intensity)
-        }
-
-        ctx.putImageData(currentFrame, 0, 0)
-        previousFrameRef.current = currentFrame
-      } else {
-        // Store current frame for next iteration
-        previousFrameRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      // Apply effects
+      switch (effect) {
+        case 'time-smear':
+          applyTimeSmear(ctx, currentFrame, decay, intensity)
+          break
+        case 'echo-cascade':
+          applyEchoCascade(ctx, currentFrame, canvas.width, canvas.height, decay, intensity)
+          break
+        case 'temporal-glitch':
+          applyTemporalGlitch(ctx, currentFrame, intensity)
+          break
+        case 'breath-sync':
+          applyBreathSync(ctx, canvas, video, intensity, decay)
+          break
+        case 'memory-fade':
+          applyMemoryFade(ctx, currentFrame, decay, intensity)
+          break
+        case 'liquid-time':
+          applyLiquidTime(ctx, currentFrame, canvas.width, canvas.height, decay)
+          break
+        default:
+          previousFrameRef.current = currentFrame
       }
 
-      // Report time update
       if (onTimeUpdate) {
         onTimeUpdate(video.currentTime, video.duration)
       }
 
       animationRef.current = requestAnimationFrame(render)
+    }
+
+    // Effect implementations
+    const applyTimeSmear = (
+      ctx: CanvasRenderingContext2D,
+      currentFrame: ImageData,
+      decay: number,
+      intensity: number
+    ) => {
+      if (previousFrameRef.current) {
+        const prev = previousFrameRef.current
+        for (let i = 0; i < currentFrame.data.length; i += 4) {
+          const r = currentFrame.data[i]
+          const g = currentFrame.data[i + 1]
+          const b = currentFrame.data[i + 2]
+          const pr = prev.data[i] * decay
+          const pg = prev.data[i + 1] * decay
+          const pb = prev.data[i + 2] * decay
+          currentFrame.data[i] = Math.min(255, r + (Math.max(r, pr) - r) * intensity)
+          currentFrame.data[i + 1] = Math.min(255, g + (Math.max(g, pg) - g) * intensity)
+          currentFrame.data[i + 2] = Math.min(255, b + (Math.max(b, pb) - b) * intensity)
+        }
+        ctx.putImageData(currentFrame, 0, 0)
+      }
+      previousFrameRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    }
+
+    const applyEchoCascade = (
+      ctx: CanvasRenderingContext2D,
+      currentFrame: ImageData,
+      width: number,
+      height: number,
+      decay: number,
+      intensity: number
+    ) => {
+      const maxEchoes = Math.floor(3 + intensity * 5) // 3-8 echoes
+      
+      // Add current frame to history
+      frameHistoryRef.current.unshift(
+        ctx.getImageData(0, 0, width, height)
+      )
+      
+      // Keep only needed frames
+      if (frameHistoryRef.current.length > maxEchoes) {
+        frameHistoryRef.current = frameHistoryRef.current.slice(0, maxEchoes)
+      }
+
+      // Draw echoes from oldest to newest
+      ctx.clearRect(0, 0, width, height)
+      
+      for (let i = frameHistoryRef.current.length - 1; i >= 0; i--) {
+        const alpha = Math.pow(decay, i) * (1 - i / frameHistoryRef.current.length)
+        ctx.globalAlpha = alpha
+        
+        // Create temp canvas for the frame
+        const tempCanvas = document.createElement('canvas')
+        tempCanvas.width = width
+        tempCanvas.height = height
+        const tempCtx = tempCanvas.getContext('2d')!
+        tempCtx.putImageData(frameHistoryRef.current[i], 0, 0)
+        
+        // Draw with offset
+        const offset = i * 3 * intensity
+        ctx.drawImage(tempCanvas, offset, offset)
+      }
+      
+      ctx.globalAlpha = 1
+    }
+
+    const applyTemporalGlitch = (
+      ctx: CanvasRenderingContext2D,
+      currentFrame: ImageData,
+      intensity: number
+    ) => {
+      const glitchChance = intensity * 0.3
+      
+      if (Math.random() < glitchChance) {
+        // RGB split
+        const splitAmount = Math.floor(intensity * 15)
+        const imageData = currentFrame
+        
+        for (let i = 0; i < imageData.data.length; i += 4) {
+          // Shift red channel
+          const redIndex = i + splitAmount * 4
+          if (redIndex < imageData.data.length) {
+            imageData.data[i] = imageData.data[redIndex] || imageData.data[i]
+          }
+          // Shift blue channel opposite
+          const blueIndex = i - splitAmount * 4
+          if (blueIndex >= 0) {
+            imageData.data[i + 2] = imageData.data[blueIndex + 2] || imageData.data[i + 2]
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0)
+        
+        // Random horizontal slice displacement
+        if (Math.random() < 0.5) {
+          const sliceY = Math.floor(Math.random() * canvas.height)
+          const sliceHeight = Math.floor(Math.random() * 30 + 10)
+          const displacement = Math.floor((Math.random() - 0.5) * 40 * intensity)
+          
+          const sliceData = ctx.getImageData(0, sliceY, canvas.width, sliceHeight)
+          ctx.putImageData(sliceData, displacement, sliceY)
+        }
+      }
+      
+      previousFrameRef.current = currentFrame
+    }
+
+    const applyBreathSync = (
+      ctx: CanvasRenderingContext2D,
+      canvas: HTMLCanvasElement,
+      video: HTMLVideoElement,
+      intensity: number,
+      speed: number
+    ) => {
+      const breathSpeed = 0.5 + speed * 2 // 0.5 - 2.5 Hz
+      const breathPhase = Math.sin(timeRef.current * breathSpeed * Math.PI * 2)
+      const scale = 1 + breathPhase * intensity * 0.1 // +/- 10% max
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.save()
+      
+      // Scale from center
+      ctx.translate(canvas.width / 2, canvas.height / 2)
+      ctx.scale(scale, scale)
+      ctx.translate(-canvas.width / 2, -canvas.height / 2)
+      
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      
+      // Subtle brightness pulse
+      ctx.fillStyle = `rgba(255, 255, 255, ${breathPhase * intensity * 0.05})`
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
+      ctx.restore()
+    }
+
+    const applyMemoryFade = (
+      ctx: CanvasRenderingContext2D,
+      currentFrame: ImageData,
+      decay: number,
+      intensity: number
+    ) => {
+      if (previousFrameRef.current) {
+        const prev = previousFrameRef.current
+        
+        for (let i = 0; i < currentFrame.data.length; i += 4) {
+          // Current frame colors
+          const r = currentFrame.data[i]
+          const g = currentFrame.data[i + 1]
+          const b = currentFrame.data[i + 2]
+          
+          // Previous frame (faded)
+          const pr = prev.data[i]
+          const pg = prev.data[i + 1]
+          const pb = prev.data[i + 2]
+          
+          // Desaturate previous frame
+          const gray = (pr + pg + pb) / 3
+          const fadedR = pr + (gray - pr) * intensity
+          const fadedG = pg + (gray - pg) * intensity
+          const fadedB = pb + (gray - pb) * intensity
+          
+          // Blend with decay
+          currentFrame.data[i] = r * (1 - decay * 0.5) + fadedR * decay * 0.5
+          currentFrame.data[i + 1] = g * (1 - decay * 0.5) + fadedG * decay * 0.5
+          currentFrame.data[i + 2] = b * (1 - decay * 0.5) + fadedB * decay * 0.5
+        }
+        
+        ctx.putImageData(currentFrame, 0, 0)
+        
+        // Add slight blur effect via canvas filter
+        ctx.filter = `blur(${intensity * 2}px)`
+        ctx.globalAlpha = decay * 0.3
+        ctx.drawImage(canvas, 0, 0)
+        ctx.filter = 'none'
+        ctx.globalAlpha = 1
+      }
+      
+      previousFrameRef.current = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    }
+
+    const applyLiquidTime = (
+      ctx: CanvasRenderingContext2D,
+      currentFrame: ImageData,
+      width: number,
+      height: number,
+      speed: number
+    ) => {
+      // Wave distortion effect
+      const waveAmplitude = 10 * speed
+      const waveFrequency = 0.02
+      const time = timeRef.current
+      
+      const tempCanvas = document.createElement('canvas')
+      tempCanvas.width = width
+      tempCanvas.height = height
+      const tempCtx = tempCanvas.getContext('2d')!
+      tempCtx.putImageData(currentFrame, 0, 0)
+      
+      ctx.clearRect(0, 0, width, height)
+      
+      // Draw with wave distortion
+      for (let y = 0; y < height; y++) {
+        const offset = Math.sin(y * waveFrequency + time * 2) * waveAmplitude
+        ctx.drawImage(
+          tempCanvas,
+          0, y, width, 1,
+          offset, y, width, 1
+        )
+      }
+      
+      previousFrameRef.current = ctx.getImageData(0, 0, width, height)
     }
 
     render()
@@ -137,7 +359,6 @@ export function VideoCanvas({
 
   return (
     <div className="relative w-full h-full flex items-center justify-center">
-      {/* Hidden video element */}
       <video
         ref={videoRef}
         src={videoUrl || undefined}
@@ -148,18 +369,16 @@ export function VideoCanvas({
         playsInline
       />
 
-      {/* Canvas for rendering */}
       <canvas
         ref={canvasRef}
         className={`max-w-full max-h-full object-contain rounded-lg ${
           videoLoaded ? 'block' : 'hidden'
         }`}
         style={{
-          boxShadow: effect ? '0 0 40px rgba(99, 102, 241, 0.2)' : undefined,
+          boxShadow: effect ? '0 0 40px rgba(47, 129, 247, 0.3)' : undefined,
         }}
       />
 
-      {/* Placeholder when no video */}
       {!videoLoaded && (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-tempo-text-muted">
           <svg
@@ -182,4 +401,3 @@ export function VideoCanvas({
     </div>
   )
 }
-

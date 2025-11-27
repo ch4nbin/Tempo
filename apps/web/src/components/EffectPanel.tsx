@@ -8,15 +8,22 @@ interface Effect {
   name: string
   icon: string
   description: string
+  available: boolean
 }
 
 const EFFECTS: Effect[] = [
-  { id: 'time-smear', name: 'Time Smear', icon: '◐', description: 'Motion trails that linger and fade' },
-  { id: 'echo-cascade', name: 'Echo Cascade', icon: '◷', description: 'Recursive ghost copies' },
-  { id: 'liquid-time', name: 'Liquid Time', icon: '≋', description: 'Regions move at different speeds' },
-  { id: 'temporal-glitch', name: 'Temporal Glitch', icon: '⚡', description: 'Frames bleed through time' },
-  { id: 'breath-sync', name: 'Breath Sync', icon: '◉', description: 'Video pulses rhythmically' },
-  { id: 'memory-fade', name: 'Memory Fade', icon: '◌', description: 'Older frames desaturate' },
+  { id: 'time-smear', name: 'Time Smear', icon: '◐', description: 'Motion trails that linger and fade', available: true },
+  { id: 'echo-cascade', name: 'Echo Cascade', icon: '◷', description: 'Recursive ghost copies', available: true },
+  { id: 'liquid-time', name: 'Liquid Time', icon: '≋', description: 'Wavy time distortion', available: true },
+  { id: 'temporal-glitch', name: 'Temporal Glitch', icon: '⚡', description: 'RGB split & slice displacement', available: true },
+  { id: 'breath-sync', name: 'Breath Sync', icon: '◉', description: 'Rhythmic pulsing effect', available: true },
+  { id: 'memory-fade', name: 'Memory Fade', icon: '◌', description: 'Desaturate & blur over time', available: true },
+]
+
+const COMING_SOON_EFFECTS = [
+  { name: 'Datamosh', icon: '▦', description: 'Compression artifact art' },
+  { name: 'Time Reverb', icon: '◀◀', description: 'Audio-reactive time loops' },
+  { name: 'Fractal Echo', icon: '❋', description: 'Self-similar recursive patterns' },
 ]
 
 interface EffectPanelProps {
@@ -50,13 +57,11 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
       const result = await generateEffect(aiPrompt.trim())
       setAiResult(result)
       
-      // Auto-apply the first effect
       if (result.effects.length > 0) {
         onAIGenerate(aiPrompt.trim(), result.effects)
         onSelectEffect(result.effects[0].type)
       }
-    } catch (err) {
-      // If backend is not running, use fallback
+    } catch {
       console.warn('AI API not available, using fallback')
       const fallbackEffects: GeneratedEffect[] = [
         { type: 'time-smear', params: { decay: 0.9, intensity: 0.5 } }
@@ -83,19 +88,18 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
       <div className="space-y-2 flex-1 overflow-y-auto">
         {EFFECTS.map((effect) => {
           const isSelected = selectedEffect === effect.id
-          const isAvailable = effect.id === 'time-smear'
           
           return (
             <button
               key={effect.id}
-              onClick={() => isAvailable && handleEffectClick(effect.id)}
-              disabled={!isAvailable}
+              onClick={() => effect.available && handleEffectClick(effect.id)}
+              disabled={!effect.available}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all text-left group
                 ${isSelected 
                   ? 'bg-tempo-accent/20 border-tempo-accent text-tempo-text' 
                   : 'bg-tempo-surface border-transparent hover:bg-tempo-border/50 hover:border-tempo-border'
                 }
-                ${!isAvailable ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
+                ${!effect.available ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}
               `}
             >
               <span className={`text-lg transition-opacity ${isSelected ? 'opacity-100' : 'opacity-60 group-hover:opacity-100'}`}>
@@ -117,7 +121,36 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
         })}
       </div>
 
-      <div className="mt-6 pt-6 border-t border-tempo-border">
+      {/* Coming Soon Section */}
+      <div className="mt-4 pt-4 border-t border-tempo-border">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-tempo-text-muted">
+            Coming Soon
+          </span>
+          <span className="px-1.5 py-0.5 text-[10px] bg-tempo-accent/20 text-tempo-accent rounded">
+            NEW
+          </span>
+        </div>
+        <div className="space-y-1.5">
+          {COMING_SOON_EFFECTS.map((effect) => (
+            <div
+              key={effect.name}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-tempo-bg/50 opacity-50"
+            >
+              <span className="text-sm opacity-60">{effect.icon}</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs block">{effect.name}</span>
+                <span className="text-[10px] text-tempo-text-muted block truncate">
+                  {effect.description}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* AI Generate Section */}
+      <div className="mt-4 pt-4 border-t border-tempo-border">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-tempo-text-muted mb-3">
           AI Generate
         </h2>
@@ -149,7 +182,6 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
           </button>
         </div>
 
-        {/* AI Result */}
         {aiResult && (
           <div className="mt-3 p-3 bg-tempo-bg rounded-lg border border-tempo-border">
             <p className="text-xs text-tempo-text-muted mb-2">{aiResult.reasoning}</p>
@@ -179,7 +211,7 @@ export function EffectPanel({ selectedEffect, onSelectEffect, onAIGenerate }: Ef
         )}
 
         <p className="text-xs text-tempo-text-muted mt-2">
-          Try: &quot;nostalgic memory&quot;, &quot;anxious heartbeat&quot;, &quot;psychedelic&quot;
+          Try: &quot;nostalgic&quot;, &quot;anxious&quot;, &quot;psychedelic&quot;
         </p>
       </div>
     </aside>
