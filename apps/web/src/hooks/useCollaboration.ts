@@ -17,6 +17,12 @@ interface AwarenessState {
   selection: [number, number] | null // Selected time range
 }
 
+interface EffectSettings {
+  selectedEffect: string | null
+  decay: number
+  intensity: number
+}
+
 interface UseCollaborationReturn {
   // Connection state
   isConnected: boolean
@@ -34,6 +40,11 @@ interface UseCollaborationReturn {
   updateEffect: (id: string, updates: Partial<EffectClip>) => void
   removeEffect: (id: string) => void
   
+  // Current effect settings (synced)
+  effectSettings: EffectSettings
+  setSelectedEffect: (effect: string | null) => void
+  setEffectParams: (params: { decay: number; intensity: number }) => void
+  
   // Cursor presence
   updateCursor: (position: number | null) => void
   updateSelection: (selection: [number, number] | null) => void
@@ -49,9 +60,15 @@ export function useCollaboration(projectId: string): UseCollaborationReturn {
     name: 'Loading...', 
     color: '#2f81f7' 
   })
+  const [effectSettings, setEffectSettingsState] = useState<EffectSettings>({
+    selectedEffect: null,
+    decay: 0.9,
+    intensity: 0.5,
+  })
   
   const stateRef = useRef<CollaborationState | null>(null)
   const effectsArrayRef = useRef<Y.Array<EffectClip> | null>(null)
+  const effectMapRef = useRef<Y.Map<unknown> | null>(null)
 
   // Set user on client side only
   useEffect(() => {
@@ -73,6 +90,28 @@ export function useCollaboration(projectId: string): UseCollaborationReturn {
     }
     effectsArray.observe(updateEffects)
     updateEffects()
+    
+    // Get shared effect settings map
+    const effectMap = state.doc.getMap('currentEffect')
+    effectMapRef.current = effectMap
+    
+    // Initialize defaults if not set
+    if (!effectMap.has('selectedEffect')) {
+      effectMap.set('selectedEffect', null)
+      effectMap.set('decay', 0.9)
+      effectMap.set('intensity', 0.5)
+    }
+    
+    // Sync effect settings state
+    const updateEffectSettings = () => {
+      setEffectSettingsState({
+        selectedEffect: effectMap.get('selectedEffect') as string | null,
+        decay: (effectMap.get('decay') as number) ?? 0.9,
+        intensity: (effectMap.get('intensity') as number) ?? 0.5,
+      })
+    }
+    effectMap.observe(updateEffectSettings)
+    updateEffectSettings()
     
     // Handle connection status
     if (state.provider) {
@@ -154,6 +193,18 @@ export function useCollaboration(projectId: string): UseCollaborationReturn {
     stateRef.current?.awareness?.setLocalStateField('selection', selection)
   }, [])
 
+  const setSelectedEffect = useCallback((effect: string | null) => {
+    effectMapRef.current?.set('selectedEffect', effect)
+  }, [])
+
+  const setEffectParams = useCallback((params: { decay: number; intensity: number }) => {
+    const map = effectMapRef.current
+    if (map) {
+      map.set('decay', params.decay)
+      map.set('intensity', params.intensity)
+    }
+  }, [])
+
   return {
     isConnected,
     isSynced,
@@ -163,6 +214,9 @@ export function useCollaboration(projectId: string): UseCollaborationReturn {
     addEffect,
     updateEffect,
     removeEffect,
+    effectSettings,
+    setSelectedEffect,
+    setEffectParams,
     updateCursor,
     updateSelection,
   }

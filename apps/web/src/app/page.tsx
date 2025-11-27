@@ -11,8 +11,6 @@ import { useCollaboration } from '@/hooks/useCollaboration'
 
 export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
-  const [selectedEffect, setSelectedEffect] = useState<string | null>(null)
-  const [effectParams, setEffectParams] = useState({ decay: 0.9, intensity: 0.5 })
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -42,8 +40,15 @@ export default function Home() {
     isConnected,
     currentUser,
     collaborators,
+    effectSettings,
+    setSelectedEffect,
+    setEffectParams,
     updateCursor,
   } = useCollaboration(projectId)
+
+  // Derive selected effect and params from synced state
+  const selectedEffect = effectSettings.selectedEffect
+  const effectParams = { decay: effectSettings.decay, intensity: effectSettings.intensity }
 
   const handleFileSelect = useCallback((file: File) => {
     if (file.type.startsWith('video/')) {
@@ -97,7 +102,7 @@ export default function Home() {
         })
       }
     }
-  }, [])
+  }, [setSelectedEffect, setEffectParams])
 
   const handlePlayPause = useCallback(() => {
     setIsPlaying((prev) => !prev)

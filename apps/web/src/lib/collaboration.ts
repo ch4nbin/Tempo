@@ -74,6 +74,7 @@ export function initCollaboration(projectId: string): CollaborationState {
   doc.getArray<EffectClip>('effects')
   doc.getMap('video')
   doc.getMap('playback')
+  doc.getMap('currentEffect') // For syncing the active effect
   
   let provider: WebsocketProvider | null = null
   let persistence: IndexeddbPersistence | null = null
