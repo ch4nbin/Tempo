@@ -1,5 +1,13 @@
 'use client'
 
+import { CollaboratorAvatars } from './CollaboratorAvatars'
+
+interface User {
+  id: string
+  name: string
+  color: string
+}
+
 interface PropertiesPanelProps {
   selectedEffect: string | null
   effectParams: {
@@ -7,12 +15,21 @@ interface PropertiesPanelProps {
     intensity: number
   }
   onParamsChange: (params: { decay: number; intensity: number }) => void
+  currentUser: User
+  collaborators: Array<{
+    user: User
+    cursor: number | null
+  }>
+  isConnected: boolean
 }
 
 export function PropertiesPanel({
   selectedEffect,
   effectParams,
   onParamsChange,
+  currentUser,
+  collaborators,
+  isConnected,
 }: PropertiesPanelProps) {
   const handleDecayChange = (value: number) => {
     onParamsChange({ ...effectParams, decay: value })
@@ -23,7 +40,7 @@ export function PropertiesPanel({
   }
 
   return (
-    <aside className="w-72 border-l border-tempo-border bg-tempo-surface/30 p-4">
+    <aside className="w-72 border-l border-tempo-border bg-tempo-surface/30 p-4 flex flex-col">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-tempo-text-muted mb-4">
         Properties
       </h2>
@@ -113,19 +130,14 @@ export function PropertiesPanel({
         </div>
       )}
 
-      <div className="mt-6 pt-6 border-t border-tempo-border">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-tempo-text-muted mb-4">
-          Collaborators
-        </h2>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center text-xs font-medium text-white">
-            Y
-          </div>
-          <span className="text-sm">You</span>
-          <span className="ml-auto text-xs text-green-400">● Online</span>
-        </div>
+      {/* Collaborators Section */}
+      <div className="mt-auto pt-6 border-t border-tempo-border">
+        <CollaboratorAvatars
+          currentUser={currentUser}
+          collaborators={collaborators}
+          isConnected={isConnected}
+        />
       </div>
     </aside>
   )
 }
-

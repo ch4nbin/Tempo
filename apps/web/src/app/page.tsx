@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { VideoCanvas } from '@/components/VideoCanvas'
 import { EffectPanel } from '@/components/EffectPanel'
 import { PropertiesPanel } from '@/components/PropertiesPanel'
 import { Timeline } from '@/components/Timeline'
+import { useCollaboration } from '@/hooks/useCollaboration'
 
 export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -16,6 +17,28 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Initialize collaboration with a project ID
+  const [projectId, setProjectId] = useState('default')
+  
+  // Set project ID on client side only
+  useEffect(() => {
+    const hash = window.location.hash.slice(1)
+    if (hash) {
+      setProjectId(hash)
+    } else {
+      const newId = Math.random().toString(36).substring(2, 9)
+      window.location.hash = newId
+      setProjectId(newId)
+    }
+  }, [])
+
+  const {
+    isConnected,
+    currentUser,
+    collaborators,
+    updateCursor,
+  } = useCollaboration(projectId)
 
   const handleFileSelect = useCallback((file: File) => {
     if (file.type.startsWith('video/')) {
@@ -74,6 +97,23 @@ export default function Home() {
     setCurrentTime(time)
   }, [])
 
+  const handleCursorMove = useCallback((position: number | null) => {
+    updateCursor(position)
+  }, [updateCursor])
+
+  // Transform collaborators for components
+  const timelineCollaborators = collaborators.map(c => ({
+    clientId: c.clientId,
+    user: c.user,
+    cursor: c.cursor,
+    selection: c.selection,
+  }))
+
+  const propertiesCollaborators = collaborators.map(c => ({
+    user: c.user,
+    cursor: c.cursor,
+  }))
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       {/* Hidden file input */}
@@ -117,7 +157,17 @@ export default function Home() {
           )}
         </div>
 
-        <nav className="flex items-center gap-2">
+        <nav className="flex items-center gap-3">
+          {/* Connection indicator */}
+          <div className="flex items-center gap-1.5 text-xs text-tempo-text-muted">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isConnected ? 'bg-green-400' : 'bg-yellow-400'
+              }`}
+            />
+            {isConnected ? 'Live' : 'Offline'}
+          </div>
+
           <button
             onClick={() => fileInputRef.current?.click()}
             className="px-3 py-1.5 text-sm text-tempo-text-muted hover:text-tempo-text transition-colors"
@@ -184,8 +234,10 @@ export default function Home() {
               isPlaying={isPlaying}
               videoFile={videoFile}
               selectedEffect={selectedEffect}
+              collaborators={timelineCollaborators}
               onTimeChange={handleTimeChange}
               onPlayPause={handlePlayPause}
+              onCursorMove={handleCursorMove}
             />
           </div>
         </div>
@@ -195,6 +247,9 @@ export default function Home() {
           selectedEffect={selectedEffect}
           effectParams={effectParams}
           onParamsChange={setEffectParams}
+          currentUser={currentUser}
+          collaborators={propertiesCollaborators}
+          isConnected={isConnected}
         />
       </main>
     </div>

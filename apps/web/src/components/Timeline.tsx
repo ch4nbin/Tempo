@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { CollaboratorCursors } from './CollaboratorCursors'
 
 interface TimelineClip {
   id: string
@@ -12,14 +13,27 @@ interface TimelineClip {
   color: string
 }
 
+interface Collaborator {
+  clientId: number
+  user: {
+    id: string
+    name: string
+    color: string
+  }
+  cursor: number | null
+  selection: [number, number] | null
+}
+
 interface TimelineProps {
   duration: number
   currentTime: number
   isPlaying: boolean
   videoFile: File | null
   selectedEffect: string | null
+  collaborators?: Collaborator[]
   onTimeChange: (time: number) => void
   onPlayPause: () => void
+  onCursorMove?: (position: number | null) => void
 }
 
 function formatTimeRuler(seconds: number): string {
@@ -34,8 +48,10 @@ export function Timeline({
   isPlaying,
   videoFile,
   selectedEffect,
+  collaborators = [],
   onTimeChange,
   onPlayPause,
+  onCursorMove,
 }: TimelineProps) {
   const [zoom, setZoom] = useState(1) // pixels per second
   const [scrollLeft, setScrollLeft] = useState(0)
@@ -97,6 +113,20 @@ export function Timeline({
   const handleMouseUp = useCallback(() => {
     setIsDraggingPlayhead(false)
   }, [])
+
+  // Track cursor position for collaboration
+  const handleMouseMoveTimeline = useCallback((e: React.MouseEvent) => {
+    if (!timelineRef.current || !onCursorMove) return
+    
+    const rect = timelineRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left + scrollLeft - 80 // Subtract track label width
+    const time = Math.max(0, Math.min(duration, x / pixelsPerSecond))
+    onCursorMove(time)
+  }, [duration, pixelsPerSecond, scrollLeft, onCursorMove])
+
+  const handleMouseLeaveTimeline = useCallback(() => {
+    onCursorMove?.(null)
+  }, [onCursorMove])
 
   useEffect(() => {
     if (isDraggingPlayhead) {
@@ -239,6 +269,8 @@ export function Timeline({
         className="flex-1 overflow-x-auto overflow-y-hidden cursor-crosshair"
         onScroll={handleScroll}
         onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMoveTimeline}
+        onMouseLeave={handleMouseLeaveTimeline}
       >
         <div className="relative min-h-full" style={{ width: timelineWidth + 80 }}>
           {/* Track Labels */}
@@ -301,6 +333,13 @@ export function Timeline({
               <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rounded-sm rotate-45" />
             </div>
           )}
+
+          {/* Collaborator Cursors */}
+          <CollaboratorCursors
+            collaborators={collaborators}
+            pixelsPerSecond={pixelsPerSecond}
+            offsetLeft={80}
+          />
         </div>
       </div>
 
