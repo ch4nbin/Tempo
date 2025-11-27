@@ -1,49 +1,83 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	"github.com/rs/cors"
+	"github.com/ch4nbin/tempo/api/internal/handler"
+	"github.com/ch4nbin/tempo/api/internal/middleware"
+	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file if it exists
+	godotenv.Load()
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	mux := http.NewServeMux()
+	r := chi.NewRouter()
+
+	// Middleware
+	r.Use(chimiddleware.Logger)
+	r.Use(chimiddleware.Recoverer)
+	r.Use(chimiddleware.RequestID)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000", "https://*.vercel.app"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Health check
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"status":  "ok",
-			"service": "tempo-api",
+	r.Get("/health", handler.HealthCheck)
+
+	// API routes
+	r.Route("/api/v1", func(r chi.Router) {
+		// Projects
+		r.Route("/projects", func(r chi.Router) {
+			r.Get("/", handler.ListProjects)
+			r.Post("/", handler.CreateProject)
+			r.Get("/{projectID}", handler.GetProject)
+			r.Put("/{projectID}", handler.UpdateProject)
+			r.Delete("/{projectID}", handler.DeleteProject)
+		})
+
+		// Videos (upload handling)
+		r.Route("/videos", func(r chi.Router) {
+			r.Post("/upload", handler.UploadVideo)
+			r.Get("/{videoID}", handler.GetVideo)
+			r.Delete("/{videoID}", handler.DeleteVideo)
+		})
+
+		// Effects
+		r.Route("/effects", func(r chi.Router) {
+			r.Get("/", handler.ListEffects)
+			r.Get("/{effectID}", handler.GetEffect)
+		})
+
+		// AI Generation
+		r.Route("/ai", func(r chi.Router) {
+			r.Use(middleware.RateLimit)
+			r.Post("/generate-effect", handler.GenerateEffect)
+		})
+
+		// Export
+		r.Route("/export", func(r chi.Router) {
+			r.Post("/", handler.StartExport)
+			r.Get("/{exportID}/status", handler.GetExportStatus)
+			r.Get("/{exportID}/download", handler.DownloadExport)
 		})
 	})
 
-	// API routes will be added here
-	mux.HandleFunc("/api/v1/projects", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"projects": []interface{}{},
-		})
-	})
-
-	// CORS middleware
-	handler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: true,
-	}).Handler(mux)
-
-	fmt.Printf("🎬 Tempo API server starting on http://localhost:%s\n", port)
-	log.Fatal(http.ListenAndServe(":"+port, handler))
+	log.Printf("🎬 Tempo API server starting on http://localhost:%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }
-
