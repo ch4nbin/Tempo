@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { VideoCanvas } from '@/components/VideoCanvas'
+import { VideoCanvas, type VideoCanvasHandle } from '@/components/VideoCanvas'
 import { EffectPanel } from '@/components/EffectPanel'
 import { PropertiesPanel } from '@/components/PropertiesPanel'
 import { Timeline } from '@/components/Timeline'
@@ -21,6 +21,7 @@ export default function Home() {
   const [showExportModal, setShowExportModal] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoCanvasRef = useRef<VideoCanvasHandle>(null)
 
   // Initialize collaboration with a project ID
   const [projectId, setProjectId] = useState('default')
@@ -230,6 +231,7 @@ export default function Home() {
               } ${!videoFile ? 'cursor-pointer' : ''}`}
             >
               <VideoCanvas
+                ref={videoCanvasRef}
                 videoFile={videoFile}
                 effect={selectedEffect}
                 effectParams={effectParams}
@@ -286,6 +288,8 @@ export default function Home() {
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
         projectId={projectId}
+        canvasRef={{ current: videoCanvasRef.current?.canvas ?? null }}
+        videoRef={{ current: videoCanvasRef.current?.video ?? null }}
       />
     </div>
   )

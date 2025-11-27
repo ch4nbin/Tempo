@@ -147,10 +147,14 @@ export function Timeline({
     }
   }, [])
 
-  // Generate time ruler marks
-  const rulerMarks = []
+  // Generate time ruler marks (with safety checks)
+  const rulerMarks: number[] = []
+  const safeDuration = Number.isFinite(duration) && duration > 0 ? duration : 60
   const markInterval = zoom < 0.5 ? 10 : zoom < 1 ? 5 : zoom < 2 ? 2 : 1
-  for (let t = 0; t <= duration; t += markInterval) {
+  const maxMarks = Math.min(Math.ceil(safeDuration / markInterval) + 1, 1000)
+  for (let i = 0; i < maxMarks; i++) {
+    const t = i * markInterval
+    if (t > safeDuration) break
     rulerMarks.push(t)
   }
 

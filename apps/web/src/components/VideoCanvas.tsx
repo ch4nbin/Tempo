@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react'
 
 interface VideoCanvasProps {
   videoFile: File | null
@@ -13,15 +13,26 @@ interface VideoCanvasProps {
   onTimeUpdate?: (currentTime: number, duration: number) => void
 }
 
-export function VideoCanvas({
+export interface VideoCanvasHandle {
+  canvas: HTMLCanvasElement | null
+  video: HTMLVideoElement | null
+}
+
+export const VideoCanvas = forwardRef<VideoCanvasHandle, VideoCanvasProps>(function VideoCanvas({
   videoFile,
   effect,
   effectParams,
   isPlaying,
   onTimeUpdate,
-}: VideoCanvasProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Expose refs to parent - update when video loads
+  useImperativeHandle(ref, () => ({
+    canvas: canvasRef.current,
+    video: videoRef.current,
+  }))
   const animationRef = useRef<number>(0)
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
   
@@ -464,4 +475,4 @@ export function VideoCanvas({
       )}
     </div>
   )
-}
+})
