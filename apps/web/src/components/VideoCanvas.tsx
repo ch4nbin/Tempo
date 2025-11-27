@@ -51,9 +51,21 @@ export function VideoCanvas({
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     
-    ctxRef.current = canvas.getContext('2d', { willReadFrequently: true })
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    ctxRef.current = ctx
+    
+    // Draw first frame immediately
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    }
+    
+    // Report initial duration
+    if (onTimeUpdate) {
+      onTimeUpdate(0, video.duration)
+    }
+    
     setVideoLoaded(true)
-  }, [])
+  }, [onTimeUpdate])
 
   // Render loop
   useEffect(() => {
@@ -64,12 +76,7 @@ export function VideoCanvas({
     if (!video || !canvas || !ctx || !videoLoaded) return
 
     const render = () => {
-      if (video.paused && !video.ended) {
-        animationRef.current = requestAnimationFrame(render)
-        return
-      }
-
-      // Draw current frame
+      // Always draw current frame (even when paused for scrubbing)
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
       // Apply Time Smear effect
